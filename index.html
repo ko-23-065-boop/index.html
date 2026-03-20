@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Firebase App</title>
+  <title>ToDo Firebase</title>
 </head>
 <body>
 
-  <h2>Посты</h2>
+  <h2>Список задач</h2>
 
-  <input type="text" id="text" placeholder="Введите текст">
-  <button onclick="addPost()">Добавить</button>
+  <input type="text" id="task" placeholder="Введите задачу">
+  <button onclick="addTask()">Добавить</button>
 
-  <div id="posts"></div>
+  <div id="tasks"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -21,12 +21,11 @@
       onSnapshot,
       updateDoc,
       doc,
-      increment,
       query,
       orderBy
     } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // 🔴 ВСТАВЬ СВОЙ firebaseConfig
+    // 🔴 ВСТАВЬ СВОЙ config
     const firebaseConfig = {
       apiKey: "ТВОЙ_KEY",
       authDomain: "ТВОЙ_DOMAIN",
@@ -36,42 +35,45 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const postsRef = collection(db, "posts");
+    const tasksRef = collection(db, "tasks");
 
-    // ➕ Добавление поста
-    window.addPost = async () => {
-      const text = document.getElementById("text").value;
+    // ✅ ФУНКЦИЯ 1 — добавление задачи
+    window.addTask = async () => {
+      const task = document.getElementById("task").value;
 
-      await addDoc(postsRef, {
-        text: text,
-        likes: 0,
+      await addDoc(tasksRef, {
+        text: task,
+        done: false,
         timestamp: Date.now()
       });
     };
 
-    // ❤️ Лайк
-    window.likePost = async (id) => {
-      const postRef = doc(db, "posts", id);
-      await updateDoc(postRef, {
-        likes: increment(1)
+    // ✅ ФУНКЦИЯ 2 — изменение статуса (выполнено/нет)
+    window.toggleTask = async (id, currentStatus) => {
+      const taskRef = doc(db, "tasks", id);
+
+      await updateDoc(taskRef, {
+        done: !currentStatus
       });
     };
 
-    // 🔄 Реалтайм обновление
-    const q = query(postsRef, orderBy("timestamp", "desc"));
+    // 🔄 Реалтайм
+    const q = query(tasksRef, orderBy("timestamp", "desc"));
 
     onSnapshot(q, (snapshot) => {
-      const postsDiv = document.getElementById("posts");
-      postsDiv.innerHTML = "";
+      const tasksDiv = document.getElementById("tasks");
+      tasksDiv.innerHTML = "";
 
       snapshot.forEach((docItem) => {
         const data = docItem.data();
 
-        postsDiv.innerHTML += `
+        tasksDiv.innerHTML += `
           <div>
             <p>${data.text}</p>
-            <p>❤️ ${data.likes}</p>
-            <button onclick="likePost('${docItem.id}')">Лайк</button>
+            <p>${data.done ? "✅ Выполнено" : "❌ Не выполнено"}</p>
+            <button onclick="toggleTask('${docItem.id}', ${data.done})">
+              Изменить статус
+            </button>
             <hr>
           </div>
         `;
