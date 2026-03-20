@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ToDo Firebase</title>
+  <title>Комментарии</title>
 </head>
 <body>
 
-  <h2>Список задач</h2>
+  <h2>Комментарии</h2>
 
-  <input type="text" id="task" placeholder="Введите задачу">
-  <button onclick="addTask()">Добавить</button>
+  <input type="text" id="comment" placeholder="Введите комментарий">
+  <button onclick="addComment()">Отправить</button>
 
-  <div id="tasks"></div>
+  <div id="comments"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -20,12 +20,9 @@
       addDoc,
       onSnapshot,
       updateDoc,
-      doc,
-      query,
-      orderBy
+      doc
     } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    // 🔴 ВСТАВЬ СВОЙ config
     const firebaseConfig = {
       apiKey: "ТВОЙ_KEY",
       authDomain: "ТВОЙ_DOMAIN",
@@ -35,44 +32,41 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const tasksRef = collection(db, "tasks");
+    const commentsRef = collection(db, "comments");
 
-    // ✅ ФУНКЦИЯ 1 — добавление задачи
-    window.addTask = async () => {
-      const task = document.getElementById("task").value;
+    // ✅ ФУНКЦИЯ 1 — добавить комментарий
+    window.addComment = async () => {
+      const text = document.getElementById("comment").value;
 
-      await addDoc(tasksRef, {
-        text: task,
-        done: false,
-        timestamp: Date.now()
+      await addDoc(commentsRef, {
+        text: text
       });
     };
 
-    // ✅ ФУНКЦИЯ 2 — изменение статуса (выполнено/нет)
-    window.toggleTask = async (id, currentStatus) => {
-      const taskRef = doc(db, "tasks", id);
+    // ✅ ФУНКЦИЯ 2 — редактировать комментарий
+    window.editComment = async (id) => {
+      const newText = prompt("Введите новый текст");
 
-      await updateDoc(taskRef, {
-        done: !currentStatus
+      const commentRef = doc(db, "comments", id);
+
+      await updateDoc(commentRef, {
+        text: newText
       });
     };
 
     // 🔄 Реалтайм
-    const q = query(tasksRef, orderBy("timestamp", "desc"));
-
-    onSnapshot(q, (snapshot) => {
-      const tasksDiv = document.getElementById("tasks");
-      tasksDiv.innerHTML = "";
+    onSnapshot(commentsRef, (snapshot) => {
+      const div = document.getElementById("comments");
+      div.innerHTML = "";
 
       snapshot.forEach((docItem) => {
         const data = docItem.data();
 
-        tasksDiv.innerHTML += `
+        div.innerHTML += `
           <div>
             <p>${data.text}</p>
-            <p>${data.done ? "✅ Выполнено" : "❌ Не выполнено"}</p>
-            <button onclick="toggleTask('${docItem.id}', ${data.done})">
-              Изменить статус
+            <button onclick="editComment('${docItem.id}')">
+              Редактировать
             </button>
             <hr>
           </div>
