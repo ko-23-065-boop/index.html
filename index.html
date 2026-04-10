@@ -1,115 +1,151 @@
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-    const SB_URL = "https://bhcsfyysbgkhlixrxebl.supabase.co";
-    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoY3NmeXlzYmdraGxpeHJ4ZWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxOTM4NTQsImV4cCI6MjA5MDc2OTg1NH0.Dmv8thqTnvqnbqDYGdzufMyNrRVEo_SLIFKPrMdTz_I";
-    const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Студенческий Портал</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; box-sizing: border-box; }
+        .auth-bar { display: flex; align-items: center; gap: 15px; }
+        .user-avatar { width: 50px; height: 50px; border-radius: 50%; background: #eee; }
+        .badge { background: #ffdf00; color: #5c4d00; padding: 3px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin-top: 5px; display: inline-block; border: 1px solid #e6c300; }
+        .leader-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .rank { font-weight: bold; color: #007bff; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #leaderList { min-height: 50px; }
+    </style>
+</head>
+<body>
 
-    // 1. ВХОД ПО ПОЧТЕ (БЕЗ ПАРОЛЯ)
-    async function login() {
-        const email = prompt("Введите ваш Email для входа:");
-        if (!email) return;
-        
-        const { error } = await supabaseClient.auth.signInWithOtp({ 
-            email,
-            options: {
-                emailRedirectTo: window.location.href // Вернуться на эту же страницу после клика в письме
+    <div id="authSection" class="container">
+        <button id="loginBtn">Войти через Email</button>
+        <div id="userInfo" style="display: none;" class="auth-bar">
+            <img id="userPhoto" class="user-avatar" src="">
+            <div>
+                <div id="userName" style="font-weight: bold; font-size: 1.1em;"></div>
+                <div id="userBadges"></div>
+            </div>
+            <button id="logoutBtn" style="width: auto; margin-left: auto; padding: 5px 10px; background: #ff4d4d;">Выйти</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🏆 Топ студентов</h3>
+        <div id="leaderList">Загрузка...</div>
+    </div>
+
+    <div id="messageForm" class="container" style="display: none;">
+        <h3>Что нового?</h3>
+        <input type="text" id="content" placeholder="Напишите что-нибудь...">
+        <button id="mainBtn">Опубликовать</button>
+    </div>
+
+    <script>
+        // Твои проверенные данные
+        const SB_URL = "https://bhcsfyysbgkhlixrxebl.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoY3NmeXlzYmdraGxpeHJ4ZWJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxOTM4NTQsImV4cCI6MjA5MDc2OTg1NH0.Dmv8thqTnvqnbqDYGdzufMyNrRVEo_SLIFKPrMdTz_I";
+        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+
+        // Функция входа
+        async function login() {
+            const email = prompt("Введите ваш Email:");
+            if (!email) return;
+            const { error } = await supabaseClient.auth.signInWithOtp({ email });
+            if (error) alert("Ошибка: " + error.message);
+            else alert("Проверьте почту! Ссылка для входа отправлена.");
+        }
+
+        // Загрузка ТОПа
+        async function loadTop() {
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('full_name, msg_count')
+                .order('msg_count', { ascending: false })
+                .limit(5);
+
+            const list = document.getElementById('leaderList');
+            if (data && data.length > 0) {
+                list.innerHTML = data.map((u, i) => `
+                    <div class="leader-item">
+                        <span><span class="rank">#${i+1}</span> ${u.full_name || 'Аноним'}</span>
+                        <b>${u.msg_count || 0} сообщ.</b>
+                    </div>
+                `).join('');
+            } else {
+                list.innerText = "Рейтинг пуст. Станьте первым!";
             }
+        }
+
+        // Обновление профиля и значков
+        async function syncProfile(user) {
+            let { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
+            
+            if (!profile) {
+                const { data } = await supabaseClient.from('profiles').upsert({
+                    id: user.id,
+                    full_name: user.email.split('@')[0],
+                    avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`,
+                    msg_count: 0,
+                    badges: []
+                }).select().single();
+                profile = data;
+            }
+
+            // Достижения
+            let badges = profile.badges || [];
+            const hour = new Date().getHours();
+            if (hour < 8 && !badges.includes("🌅 Ранняя пташка")) badges.push("🌅 Ранняя пташка");
+            if (profile.msg_count >= 5 && !badges.includes("🔥 Активист")) badges.push("🔥 Активист");
+
+            if (badges.length !== (profile.badges || []).length) {
+                await supabaseClient.from('profiles').update({ badges }).eq('id', user.id);
+            }
+
+            document.getElementById('userName').innerText = profile.full_name;
+            document.getElementById('userPhoto').src = profile.avatar_url;
+            document.getElementById('userBadges').innerHTML = badges.map(b => `<span class="badge">${b}</span>`).join('');
+        }
+
+        // Кнопка публикации
+        document.getElementById('mainBtn').onclick = async () => {
+            const text = document.getElementById('content').value;
+            if (!text) return;
+            const { data: { user } } = await supabaseClient.auth.getUser();
+
+            await supabaseClient.from('requests').insert({ user_id: user.id, text: text });
+            
+            // Накручиваем счетчик в профиле
+            const { data: p } = await supabaseClient.from('profiles').select('msg_count').eq('id', user.id).single();
+            await supabaseClient.from('profiles').update({ msg_count: (p?.msg_count || 0) + 1 }).eq('id', user.id);
+
+            document.getElementById('content').value = "";
+            syncProfile(user);
+            loadTop();
+        };
+
+        // Следим за состоянием входа
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                document.getElementById('loginBtn').style.display = 'none';
+                document.getElementById('userInfo').style.display = 'flex';
+                document.getElementById('messageForm').style.display = 'block';
+                syncProfile(session.user);
+            } else {
+                document.getElementById('loginBtn').style.display = 'block';
+                document.getElementById('userInfo').style.display = 'none';
+                document.getElementById('messageForm').style.display = 'none';
+            }
+            loadTop();
         });
 
-        if (error) alert("Ошибка: " + error.message);
-        else alert("Письмо отправлено! Проверьте почту и кликните по ссылке для входа.");
-    }
-
-    // 2. СИНХРОНИЗАЦИЯ ПРОФИЛЯ И ЗНАЧКОВ
-    async function syncProfile(user) {
-        let { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
+        document.getElementById('loginBtn').onclick = login;
+        document.getElementById('logoutBtn').onclick = () => supabaseClient.auth.signOut();
         
-        // Если профиля еще нет в таблице — создаем
-        if (!profile) {
-            const { data, error } = await supabaseClient.from('profiles').upsert({
-                id: user.id,
-                full_name: user.email.split('@')[0], // Вместо имени берем часть почты
-                avatar_url: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + user.id,
-                msg_count: 0,
-                badges: []
-            }).select().single();
-            profile = data;
-        }
-
-        // ПРОВЕРКА ДОСТИЖЕНИЙ
-        let badges = profile.badges || [];
-        const hour = new Date().getHours();
-
-        if (hour < 8 && !badges.includes("🌅 Ранняя пташка")) badges.push("🌅 Ранняя пташка");
-        if (profile.msg_count >= 20 && !badges.includes("🔥 Активист")) badges.push("🔥 Активист");
-
-        // Если значки обновились — сохраняем в базу
-        if (badges.length !== (profile.badges || []).length) {
-            await supabaseClient.from('profiles').update({ badges }).eq('id', user.id);
-        }
-
-        // Отрисовка в профиле
-        document.getElementById('userBadges').innerHTML = badges.map(b => `<span class="badge">${b}</span>`).join('');
-        document.getElementById('userName').innerText = profile.full_name;
-        document.getElementById('userPhoto').src = profile.avatar_url;
-    }
-
-    // 3. ЗАГРУЗКА ТОП-5
-    async function loadTop() {
-        const { data, error } = await supabaseClient
-            .from('profiles')
-            .select('full_name, msg_count')
-            .order('msg_count', { ascending: false })
-            .limit(5);
-
-        const list = document.getElementById('leaderList');
-        if (data && data.length > 0) {
-            list.innerHTML = data.map((u, i) => `
-                <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
-                    <span>#${i+1} ${u.full_name}</span>
-                    <b>${u.msg_count} сообщ.</b>
-                </div>
-            `).join('');
-        } else {
-            list.innerText = "Рейтинг пока пуст. Будьте первым!";
-        }
-    }
-
-    // 4. ОТПРАВКА СООБЩЕНИЯ
-    document.getElementById('mainBtn').onclick = async () => {
-        const content = document.getElementById('content').value;
-        if (!content) return;
-
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (!user) return alert("Сначала войдите!");
-
-        // Сохраняем пост
-        await supabaseClient.from('requests').insert({
-            user_id: user.id,
-            name: user.email.split('@')[0],
-            text: content
-        });
-
-        // Обновляем счетчик сообщений в профиле
-        const { data: p } = await supabaseClient.from('profiles').select('msg_count').eq('id', user.id).single();
-        await supabaseClient.from('profiles').update({ msg_count: (p?.msg_count || 0) + 1 }).eq('id', user.id);
-
-        document.getElementById('content').value = "";
-        await syncProfile(user);
-        loadTop();
-    };
-
-    // СЛУШАТЕЛЬ ВХОДА
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            document.getElementById('loginBtn').style.display = 'none';
-            document.getElementById('userInfo').style.display = 'flex';
-            document.getElementById('messageForm').style.display = 'block';
-            syncProfile(session.user);
-        }
-        loadTop();
-    });
-
-    document.getElementById('loginBtn').onclick = login;
-    document.getElementById('loginBtn').innerText = "Войти через почту";
-</script>
+        loadTop(); // Первичная загрузка топа
+    </script>
+</body>
+</html>
