@@ -2,27 +2,17 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase App: Топ и Достижения</title>
+    <title>Топ и Достижения</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        
-        /* Стили достижений */
-        .badge-list { margin-top: 5px; display: flex; gap: 5px; flex-wrap: wrap; }
-        .badge { background: #ffd700; color: #856404; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; border: 1px solid #ffeeba; }
-
-        /* Стили рейтинга */
-        .leaderboard-item { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
-        .rank { width: 30px; font-weight: bold; color: #007bff; }
-        .score { margin-left: auto; font-weight: bold; color: #666; }
-
+        .container { width: 100%; max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; box-sizing: border-box; }
         .auth-bar { display: flex; align-items: center; gap: 15px; }
         .user-avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #007bff; }
+        .badge { background: #ffd700; color: #856404; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-right: 5px; }
+        .leader-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
         input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-weight: 600; cursor: pointer; }
-        .post { background: white; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #eee; width: 100%; max-width: 500px; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -32,37 +22,35 @@
         <div id="userInfo" style="display: none;" class="auth-bar">
             <img id="userPhoto" class="user-avatar" src="">
             <div>
-                <div id="userName" style="font-weight: bold;"></div>
-                <div id="userBadges" class="badge-list"></div>
+                <b id="userName"></b>
+                <div id="userBadges" style="margin-top: 5px;"></div>
             </div>
         </div>
     </div>
 
     <div class="container">
-        <h3>🏆 Топ студентов (активность)</h3>
-        <div id="leaderboard">Загрузка...</div>
+        <h3>🏆 Топ студентов</h3>
+        <div id="leaderList">Загрузка...</div>
     </div>
 
     <div id="messageForm" class="container" style="display: none;">
         <input type="text" id="content" placeholder="Что у вас нового?">
-        <button id="sendBtn">Опубликовать</button>
+        <button id="mainBtn">Опубликовать в облако</button>
     </div>
 
-    <div id="feed" style="width: 100%; max-width: 500px;"></div>
-
     <script>
-        const SB_URL = "ТВОЙ_SUPABASE_URL";
-        const SB_KEY = "ТВОЙ_ANON_KEY";
-        const supabase = nominations.createClient(SB_URL, SB_KEY);
+        const SB_URL = "ТВОЙ_URL_ЗДЕСЬ";
+        const SB_KEY = "ТВОЙ_КЛЮЧ_ЗДЕСЬ";
+        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
 
-        // --- ЛОГИКА ДОСТИЖЕНИЙ ---
-        async function updateProfileAndCheckBadges(user) {
-            // Получаем текущий профиль
-            let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        let loginTime = Date.now(); // Для ачивки Марафонец
+
+        async function syncUser(user) {
+            // 1. Пытаемся получить профиль
+            let { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
             
             if (!profile) {
-                // Если профиля нет, создаем
-                const { data } = await supabase.from('profiles').upsert({
+                const { data } = await supabaseClient.from('profiles').upsert({
                     id: user.id,
                     full_name: user.user_metadata.full_name,
                     avatar_url: user.user_metadata.avatar_url,
@@ -72,77 +60,71 @@
                 profile = data;
             }
 
-            let newBadges = [...(profile.badges || [])];
+            // 2. Проверка ачивок
+            let badges = profile.badges || [];
             const hour = new Date().getHours();
+            const sessionDuration = (Date.now() - loginTime) / (1000 * 60 * 60);
 
-            // 1. Ранняя пташка (заход до 8 утра)
-            if (hour < 8 && !newBadges.includes("🌅 Ранняя пташка")) {
-                newBadges.push("🌅 Ранняя пташка");
+            if (hour < 8 && !badges.includes("🌅 Ранняя пташка")) badges.push("🌅 Ранняя пташка");
+            if (profile.msg_count >= 20 && !badges.includes("🔥 Активист")) badges.push("🔥 Активист");
+            if (sessionDuration >= 2 && !badges.includes("🏃 Марафонец")) badges.push("🏃 Марафонец");
+
+            // Обновляем базу, если появились новые значки
+            if (badges.length !== profile.badges.length) {
+                await supabaseClient.from('profiles').update({ badges }).eq('id', user.id);
             }
 
-            // 2. Активист (более 20 сообщений)
-            if (profile.msg_count >= 20 && !newBadges.includes("🔥 Активист")) {
-                newBadges.push("🔥 Активист");
-            }
-
-            if (newBadges.length !== profile.badges.length) {
-                await supabase.from('profiles').update({ badges: newBadges }).eq('id', user.id);
-            }
-
-            // Рендер значков
-            document.getElementById('userBadges').innerHTML = newBadges.map(b => `<span class="badge">${b}</span>`).join('');
+            // Рендер
+            document.getElementById('userBadges').innerHTML = badges.map(b => `<span class="badge">${b}</span>`).join('');
+            document.getElementById('userName').innerText = user.user_metadata.full_name;
+            document.getElementById('userPhoto').src = user.user_metadata.avatar_url;
         }
 
-        // --- ТОП СТУДЕНТОВ ---
-        async function loadLeaderboard() {
-            const { data } = await supabase.from('profiles').select('*').order('msg_count', { ascending: false }).limit(5);
-            const container = document.getElementById('leaderboard');
-            container.innerHTML = data.map((u, i) => `
-                <div class="leaderboard-item">
-                    <span class="rank">#${i+1}</span>
-                    <span>${u.full_name}</span>
-                    <span class="score">${u.msg_count} сообщ.</span>
-                </div>
-            `).join('');
+        async function loadTop() {
+            const { data } = await supabaseClient.from('profiles').select('*').order('msg_count', { ascending: false }).limit(5);
+            if (data) {
+                document.getElementById('leaderList').innerHTML = data.map((u, i) => `
+                    <div class="leader-item">
+                        <span>${i+1}. ${u.full_name}</span>
+                        <b>${u.msg_count} ✉️</b>
+                    </div>
+                `).join('');
+            }
         }
 
-        // --- РАБОТА С ПОСТАМИ ---
-        document.getElementById('sendBtn').onclick = async () => {
-            const text = document.getElementById('content').value;
-            const { data: { user } } = await supabase.auth.getUser();
+        document.getElementById('mainBtn').onclick = async () => {
+            const content = document.getElementById('content').value;
+            if (!content) return;
+            const { data: { user } } = await supabaseClient.auth.getUser();
 
-            // 1. Сохраняем пост
-            await supabase.from('requests').insert({
+            // Добавляем пост
+            await supabaseClient.from('requests').insert({
                 user_id: user.id,
                 name: user.user_metadata.full_name,
                 photo: user.user_metadata.avatar_url,
-                text: text
+                text: content
             });
 
-            // 2. Увеличиваем счетчик в профиле
-            const { data: profile } = await supabase.from('profiles').select('msg_count').eq('id', user.id).single();
-            await supabase.from('profiles').update({ msg_count: (profile?.msg_count || 0) + 1 }).eq('id', user.id);
+            // Плюс 1 к счетчику
+            const { data: p } = await supabaseClient.from('profiles').select('msg_count').eq('id', user.id).single();
+            await supabaseClient.from('profiles').update({ msg_count: (p?.msg_count || 0) + 1 }).eq('id', user.id);
 
             document.getElementById('content').value = "";
-            loadLeaderboard();
-            updateProfileAndCheckBadges(user);
+            loadTop();
+            syncUser(user);
         };
 
-        // --- ИНИЦИАЛИЗАЦИЯ ---
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabaseClient.auth.onAuthStateChange((event, session) => {
             if (session) {
-                const user = session.user;
                 document.getElementById('loginBtn').style.display = 'none';
                 document.getElementById('userInfo').style.display = 'flex';
                 document.getElementById('messageForm').style.display = 'block';
-                document.getElementById('userName').innerText = user.user_metadata.full_name;
-                document.getElementById('userPhoto').src = user.user_metadata.avatar_url;
-                updateProfileAndCheckBadges(user);
-                loadLeaderboard();
+                syncUser(session.user);
+                loadTop();
             }
         });
 
-        document.getElementById('loginBtn').onclick = () => supabase.auth.signInWithOAuth({ provider: 'google' });
+        document.getElementById('loginBtn').onclick = () => supabaseClient.auth.signInWithOAuth({ provider: 'google' });
     </script>
 </body>
 </html>
